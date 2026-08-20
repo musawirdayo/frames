@@ -1,6 +1,5 @@
 import streamlit as st
 import numpy as np
-import cv2
 from PIL import Image
 import json
 from datetime import datetime
@@ -50,6 +49,12 @@ except Exception as e:
     st.error(f"❌ Error loading models: {e}")
     st.stop()
 
+def resize_image(image_array, target_width, target_height):
+    """Resize image using PIL"""
+    img = Image.fromarray(image_array.astype('uint8'))
+    img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    return np.array(img)
+
 # Sidebar for settings
 st.sidebar.header("⚙️ Settings")
 confidence_threshold = st.sidebar.slider("Confidence Threshold", 0.0, 1.0, 0.5)
@@ -86,11 +91,13 @@ def process_face_image(image_array):
         face_output_details = face_detector.get_output_details()
         
         input_shape = face_input_details[0]['shape']
-        img_resized = cv2.resize(image_array, (input_shape[2], input_shape[1]))
+        img_resized = resize_image(image_array, input_shape[2], input_shape[1])
         
-        # Handle grayscale/color
+        # Handle grayscale/color - convert to RGB if needed
         if len(img_resized.shape) == 2:
-            img_resized = cv2.cvtColor(img_resized, cv2.COLOR_GRAY2RGB)
+            img_resized = np.stack([img_resized] * 3, axis=-1)
+        elif img_resized.shape[2] == 4:  # RGBA to RGB
+            img_resized = img_resized[:, :, :3]
         
         # Normalize
         if face_input_details[0]['dtype'] == np.float32:
@@ -123,10 +130,12 @@ def process_face_image(image_array):
         anti_spoof_output_details = anti_spoofing.get_output_details()
         
         anti_spoof_input_shape = anti_spoof_input_details[0]['shape']
-        img_resized_spoof = cv2.resize(image_array, (anti_spoof_input_shape[2], anti_spoof_input_shape[1]))
+        img_resized_spoof = resize_image(image_array, anti_spoof_input_shape[2], anti_spoof_input_shape[1])
         
         if len(img_resized_spoof.shape) == 2:
-            img_resized_spoof = cv2.cvtColor(img_resized_spoof, cv2.COLOR_GRAY2RGB)
+            img_resized_spoof = np.stack([img_resized_spoof] * 3, axis=-1)
+        elif img_resized_spoof.shape[2] == 4:  # RGBA to RGB
+            img_resized_spoof = img_resized_spoof[:, :, :3]
         
         if anti_spoof_input_details[0]['dtype'] == np.float32:
             img_spoof_input = (img_resized_spoof.astype(np.float32) / 255.0)
