@@ -3,51 +3,78 @@ import numpy as np
 from PIL import Image
 import json
 from datetime import datetime
-import subprocess
-import sys
 
-# Try to install tensorflow-lite-runtime if not available
+# Try to load TensorFlow Lite
+TFLITE_AVAILABLE = False
 try:
     from tflite_runtime.interpreter import Interpreter
+    TFLITE_AVAILABLE = True
 except ImportError:
     try:
         import tensorflow as tf
         Interpreter = tf.lite.Interpreter
+        TFLITE_AVAILABLE = True
     except ImportError:
-        # Fallback: create a simple stub
-        st.error("❌ TensorFlow Lite runtime not available. Installing...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "tflite-runtime"])
-        from tflite_runtime.interpreter import Interpreter
+        Interpreter = None
 
 st.set_page_config(page_title="FRAMES Verification System", layout="wide", initial_sidebar_state="expanded")
 
 st.title("🎓 FRAMES Teacher Attendance Verification System")
 st.write("Local testing interface for FRAMES face detection and anti-spoofing algorithm")
 
-# Load models
-@st.cache_resource
-def load_models():
-    try:
-        face_detector = Interpreter(model_path="models/face_model.tflite")
-        face_detector.allocate_tensors()
-        
-        anti_spoofing = Interpreter(model_path="models/FaceAntiSpoofing.tflite")
-        anti_spoofing.allocate_tensors()
-        
-        return face_detector, anti_spoofing
-    except Exception as e:
-        st.error(f"Error loading models: {e}")
-        return None, None
+# Check if models can be loaded
+face_detector = None
+anti_spoofing = None
 
-try:
-    face_detector, anti_spoofing = load_models()
-    if face_detector and anti_spoofing:
-        st.success("✅ Models loaded successfully!")
-    else:
+if not TFLITE_AVAILABLE:
+    st.warning(
+        """
+        ⚠️ **Streamlit Cloud Environment Notice**
+        
+        This version of the app is running in Streamlit Cloud, which doesn't support TensorFlow Lite inference 
+        due to Python 3.14 compatibility issues.
+        
+        **To run the full verification system with inference, you need to run this locally:**
+        ```bash
+        cd /path/to/frames-test
+        streamlit run app.py
+        ```
+        
+        **Currently available on Cloud:**
+        - ✅ View the verification workflow
+        - ✅ Explore model information
+        - ✅ See example results
+        
+        **Available locally only:**
+        - 🔬 Face detection inference
+        - 🛡️ Anti-spoofing checks
+        - 📊 Real-time analysis
+        """
+    )
+else:
+    @st.cache_resource
+    def load_models():
+        try:
+            face_detector = Interpreter(model_path="models/face_model.tflite")
+            face_detector.allocate_tensors()
+            
+            anti_spoofing = Interpreter(model_path="models/FaceAntiSpoofing.tflite")
+            anti_spoofing.allocate_tensors()
+            
+            return face_detector, anti_spoofing
+        except Exception as e:
+            st.error(f"Error loading models: {e}")
+            return None, None
+
+    try:
+        face_detector, anti_spoofing = load_models()
+        if face_detector and anti_spoofing:
+            st.success("✅ Models loaded successfully!")
+        else:
+            st.stop()
+    except Exception as e:
+        st.error(f"❌ Error loading models: {e}")
         st.stop()
-except Exception as e:
-    st.error(f"❌ Error loading models: {e}")
-    st.stop()
 
 def resize_image(image_array, target_width, target_height):
     """Resize image using PIL"""
@@ -60,7 +87,7 @@ st.sidebar.header("⚙️ Settings")
 confidence_threshold = st.sidebar.slider("Confidence Threshold", 0.0, 1.0, 0.5)
 spoofing_threshold = st.sidebar.slider("Anti-Spoofing Threshold", 0.0, 1.0, 0.5)
 
-# Create two columns for upload and live camera
+# Create two columns for upload and display
 col1, col2 = st.columns(2)
 
 with col1:
@@ -172,7 +199,7 @@ def process_face_image(image_array):
     
     return results_dict
 
-if uploaded_file is not None:
+if uploaded_file is not None and TFLITE_AVAILABLE:
     # Display uploaded image
     image = Image.open(uploaded_file)
     img_array = np.array(image)
@@ -246,4 +273,11 @@ with st.sidebar:
     
     ### Research Notes:
     This is a local research interface for testing the FRAMES teacher attendance algorithm.
+    
+    ### Local Setup:
+    To run this with full inference:
+    ```bash
+    pip install -r requirements.txt
+    streamlit run app.py
+    ```
     """)
