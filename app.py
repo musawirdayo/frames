@@ -4,12 +4,21 @@ import cv2
 from PIL import Image
 import json
 from datetime import datetime
+import subprocess
+import sys
 
+# Try to install tensorflow-lite-runtime if not available
 try:
     from tflite_runtime.interpreter import Interpreter
 except ImportError:
-    import tensorflow as tf
-    Interpreter = tf.lite.Interpreter
+    try:
+        import tensorflow as tf
+        Interpreter = tf.lite.Interpreter
+    except ImportError:
+        # Fallback: create a simple stub
+        st.error("❌ TensorFlow Lite runtime not available. Installing...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "tflite-runtime"])
+        from tflite_runtime.interpreter import Interpreter
 
 st.set_page_config(page_title="FRAMES Verification System", layout="wide", initial_sidebar_state="expanded")
 
@@ -19,17 +28,24 @@ st.write("Local testing interface for FRAMES face detection and anti-spoofing al
 # Load models
 @st.cache_resource
 def load_models():
-    face_detector = Interpreter(model_path="models/face_model.tflite")
-    face_detector.allocate_tensors()
-    
-    anti_spoofing = Interpreter(model_path="models/FaceAntiSpoofing.tflite")
-    anti_spoofing.allocate_tensors()
-    
-    return face_detector, anti_spoofing
+    try:
+        face_detector = Interpreter(model_path="models/face_model.tflite")
+        face_detector.allocate_tensors()
+        
+        anti_spoofing = Interpreter(model_path="models/FaceAntiSpoofing.tflite")
+        anti_spoofing.allocate_tensors()
+        
+        return face_detector, anti_spoofing
+    except Exception as e:
+        st.error(f"Error loading models: {e}")
+        return None, None
 
 try:
     face_detector, anti_spoofing = load_models()
-    st.success("✅ Models loaded successfully!")
+    if face_detector and anti_spoofing:
+        st.success("✅ Models loaded successfully!")
+    else:
+        st.stop()
 except Exception as e:
     st.error(f"❌ Error loading models: {e}")
     st.stop()
