@@ -1,10 +1,15 @@
 import streamlit as st
-import tensorflow as tf
 import numpy as np
 import cv2
 from PIL import Image
 import json
 from datetime import datetime
+
+try:
+    from tflite_runtime.interpreter import Interpreter
+except ImportError:
+    import tensorflow as tf
+    Interpreter = tf.lite.Interpreter
 
 st.set_page_config(page_title="FRAMES Verification System", layout="wide", initial_sidebar_state="expanded")
 
@@ -14,10 +19,10 @@ st.write("Local testing interface for FRAMES face detection and anti-spoofing al
 # Load models
 @st.cache_resource
 def load_models():
-    face_detector = tf.lite.Interpreter(model_path="models/face_model.tflite")
+    face_detector = Interpreter(model_path="models/face_model.tflite")
     face_detector.allocate_tensors()
     
-    anti_spoofing = tf.lite.Interpreter(model_path="models/FaceAntiSpoofing.tflite")
+    anti_spoofing = Interpreter(model_path="models/FaceAntiSpoofing.tflite")
     anti_spoofing.allocate_tensors()
     
     return face_detector, anti_spoofing
